@@ -2,66 +2,110 @@ package queue
 
 import "sync"
 
-//
+//TODO:
+// * Write Test
+// * Clean up names
+// * Check signal
+// * Document
+// * Fix indexing
+// * Check the overflow when trigger and to return what didnt get enqueue
+
+//---------------------------------------------------------------------------------------------------
+// Queue Interface
+//---------------------------------------------------------------------------------------------------
+
+//Queue provides a finite fifo queue interface that provides a signal for event driven code
 type Queue interface {
+	//Close is provides cleanup
 	Close()
-	GetSignal()
-	Dequeue()
-	DequeueMultiple()
-	Enqueue()
-	EnqueueMultiple()
-	Flush()
-	Peek()
-	PeekHead()
-	PeekTail()
+	//GetSignal returns a signal channel that can be monitored if something is enqueue (event driven)
+	GetSignal() (signal <-chan struct{})
+	//Dequeue dequeues a single (last) element
+	Dequeue() (element interface{}, underflow bool)
+	//DequeueMultiple dequeues a multiple (last) element
+	DequeueMultiple(count int) (elements []interface{}, underflow bool)
+	//Enqueue enqueues a single element
+	Enqueue(element interface{}) (overflow bool)
+	//EnqueueMultiple enqueues multiple element
+	EnqueueMultiple(elements []interface{}) (overflow bool)
+	//Flush will flush the queue and return all elements that were in it
+	Flush() (elements []interface{})
+	//Peek allows for peeking at all elements in queue
+	Peek() (elements []interface{})
+	//PeekHead allows for peek at last element
+	PeekHead() (element interface{}, underflow bool)
+	//PeekTail allows for peek at first element
+	PeekTail() (element interface{}, underflow bool)
+	//GetSize will return the size (max size of the queue)
+	GetSize() (size int)
+	//GetLength will return the current length of the queue
+	GetLength() (len int)
 }
 
-//
+//---------------------------------------------------------------------------------------------------
+// queue (pointer implmentation of the Queue Interface)
+//---------------------------------------------------------------------------------------------------
+
+//queue provides a pointer implementation of Queue
 type queue struct {
-	sync.Mutex               //
-	data       []interface{} //
-	size       int           //
-	index      int           //
-	singal     chan struct{} //
+	sync.Mutex
+	data   []interface{} //the elements inside the queue
+	size   int           //the max size of the queue
+	index  int           //current index of the queue (this is also avoids len())
+	signal chan struct{} //signal to notify that element has been enqueued
 }
 
-// //NewQueue
-// func NewQueue(size int) interface {
-// 	Queue
-// } {
-// 	//Check if size is valid
-// 	if size <= 0 {
-// 		size = DefaultSize
-// 	}
-// 	return &queue{
-// 		size: size,
-// 	}
-// }
+//NewQueue returns a new queue
+func NewQueue(size int) interface {
+	Queue
+} {
+	//Check if size is valid
+	if size <= 0 {
+		size = DefaultSize
+	}
+	data := make([]interface{}, size)
+	signal := make(chan struct{})
+	return &queue{
+		data:   data,
+		size:   size,
+		index:  0,
+		signal: signal,
+	}
+}
 
+//ensure the implementation
+var _ Queue = &queue{}
+
+//Close is provides cleanup
 func (q *queue) Close() {
 	q.Lock()
 	defer q.Unlock()
-	//TODO
+	//cleanup
+	q.signal, q.data = nil, nil
+	q.size, q.index = 0, 0
 	return
 }
 
+//GetSignal returns a signal channel that can be monitored if something is enqueue (event driven)
 func (q *queue) GetSignal() (signal <-chan struct{}) {
 	q.Lock()
 	defer q.Unlock()
 	//signal
-	signal = q.singal
+	signal = q.signal
 	return
 }
 
+//Dequeue dequeues a single (last) element
 func (q *queue) Dequeue() (element interface{}, underflow bool) {
 	q.Lock()
 	defer q.Unlock()
 	//dequeue
-	underflow, q.len, q.data, element = dequeue(q.len, q.size, q.data)
-	//TODO signal
+	underflow, element = q.dequeue()
+
 	return
 }
 
+//DequeueMultiple dequeues a multiple (last) element
 func (q *queue) DequeueMultiple(count int) (elements []interface{}, underflow bool) {
 	q.Lock()
 	defer q.Unlock()
@@ -69,55 +113,171 @@ func (q *queue) DequeueMultiple(count int) (elements []interface{}, underflow bo
 	for i := 0; i < count; i++ {
 		var element interface{}
 		//dequeue
-		underflow, q.len, q.data, element = dequeue(q.len, q.size, q.data)
-		//check for underflow
+		underflow, element = q.dequeue()
+		// check for underflow
 		if underflow {
 			return
 		}
 		elements = append(elements, element)
-		//TODO signal
 	}
 	return
 }
 
+//Enqueue enqueues a single element
 func (q *queue) Enqueue(element interface{}) (overflow bool) {
 	q.Lock()
 	defer q.Unlock()
-	//TODO
+	//enqueue
+	overflow = q.enqueue(element)
+	//trigger signal
+	q.triggerSignal()
 	return
 }
 
+//EnqueueMultiple enqueues multiple element
 func (q *queue) EnqueueMultiple(elements []interface{}) (overflow bool) {
 	q.Lock()
 	defer q.Unlock()
-	//TODO
+	//enqueue each element
+	for _, element := range elements {
+		if overflow = q.enqueue(element); overflow {
+			//overflow
+			return
+		}
+		q.triggerSignal()
+	}
 	return
 }
 
+//Flush will flush the queue and return all elements that were in it
 func (q *queue) Flush() (elements []interface{}) {
 	q.Lock()
 	defer q.Unlock()
-	//TODO
+	//flush
+	elements = q.flush()
 	return
 }
 
+//Peek allows for peeking at all elements in queue
 func (q *queue) Peek() (elements []interface{}) {
 	q.Lock()
 	defer q.Unlock()
-	//TODO
+	//Peak
+	elements = q.data
 	return
 }
 
-func (q *queue) PeekHead() (element interface{}) {
+//PeekHead allows for peek at last element
+func (q *queue) PeekHead() (element interface{}, underflow bool) {
 	q.Lock()
 	defer q.Unlock()
-	//TODO
+	//Check if queue is empty (underflow)
+	if q.checkifEmpty() {
+		underflow = true
+		return
+	}
+	//Peak head
+	element = q.data[q.index-1]
 	return
 }
 
-func (q *queue) PeekTail() (element interface{}) {
+//PeekTail allows for peek at first element
+func (q *queue) PeekTail() (element interface{}, underflow bool) {
 	q.Lock()
 	defer q.Unlock()
-	//TODO
+	//Check if queue is empty (underflow)
+	if q.checkifEmpty() {
+		underflow = true
+		return
+	}
+	//Peak tail
+	element = q.data[0]
+	return
+}
+
+//GetSize will return the size (max size of the queue)
+func (q *queue) GetSize() (size int) {
+	q.Lock()
+	defer q.Unlock()
+	size = q.size
+	return
+}
+
+//GetLength will return the current length of the queue
+func (q *queue) GetLength() (len int) {
+	q.Lock()
+	defer q.Unlock()
+	len = q.index
+	return
+}
+
+//---------------------------------------------------------------------------------------------------
+// private queue methods
+//---------------------------------------------------------------------------------------------------
+
+//triggerSignal will send the signal that elemnent(s) have been enqueued
+func (q *queue) triggerSignal() {
+	//TODO: Non-block maybe?
+	q.signal <- struct{}{}
+}
+
+//shift shifts the elements up by one
+func (q *queue) shift() {
+	l := len(q.data)
+	q.data = append(q.data[l-1:], q.data[:l-1]...)
+	return
+}
+
+//checkifEmpty will check if the queue is empty
+func (q *queue) checkifEmpty() (empty bool) {
+	empty = q.index <= 0
+	return
+}
+
+//checkifFull will check if the queue is full
+func (q *queue) checkifFull() (full bool) {
+	full = q.index >= q.size
+	return
+}
+
+//enqueue performs the enqueue logic
+func (q *queue) enqueue(element interface{}) (overflow bool) {
+	//Check if queue is full (overflow)
+	if q.checkifFull() {
+		overflow = true
+		return
+	}
+	//shift data
+	q.shift()
+	//insert element (use zero)
+	q.data[0] = element
+	//increment index
+	q.index = q.index + 1
+	return
+}
+
+//dequeue performs the dequeue logic
+func (q *queue) dequeue() (underflow bool, element interface{}) {
+	//Check if queue is empty (underflow)
+	if q.checkifEmpty() {
+		underflow = true
+		return
+	}
+	//Get the last value in
+	element = q.data[q.index-1]
+	//clear element from data
+	q.data[q.index-1] = nil
+	//decrement index
+	q.index = q.index - 1
+	return
+}
+
+//flush will flush the queue and return all elements
+func (q *queue) flush() (elements []interface{}) {
+	elements = q.data
+	//reset index
+	q.index = 0
+	//clear data
+	q.data = make([]interface{}, q.size)
 	return
 }

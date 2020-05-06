@@ -1,14 +1,12 @@
 package queue
 
-import "sync"
+import (
+	"sync"
+)
 
 //TODO:
-// * Write Test
-// * Clean up names
 // * Check signal
-// * Document
-// * Fix indexing
-// * Check the overflow when trigger and to return what didnt get enqueue
+// * Check indexing
 
 //---------------------------------------------------------------------------------------------------
 // Queue Interface
@@ -31,11 +29,11 @@ type Queue interface {
 	//Flush will flush the queue and return all elements that were in it
 	Flush() (elements []interface{})
 	//Peek allows for peeking at all elements in queue
-	Peek() (elements []interface{})
+	Peek() (elements []interface{}, empty bool)
 	//PeekHead allows for peek at last element
-	PeekHead() (element interface{}, underflow bool)
+	PeekHead() (element interface{}, empty bool)
 	//PeekTail allows for peek at first element
-	PeekTail() (element interface{}, underflow bool)
+	PeekTail() (element interface{}, empty bool)
 	//GetSize will return the size (max size of the queue)
 	GetSize() (size int)
 	//GetLength will return the current length of the queue
@@ -68,7 +66,7 @@ func NewQueue(size int) interface {
 	return &queue{
 		data:   data,
 		size:   size,
-		index:  0,
+		index:  -1,
 		signal: signal,
 	}
 }
@@ -158,36 +156,43 @@ func (q *queue) Flush() (elements []interface{}) {
 	return
 }
 
-//Peek allows for peeking at all elements in queue
-func (q *queue) Peek() (elements []interface{}) {
+//TODO: Check the empty case
+func (q *queue) Peek() (elements []interface{}, empty bool) {
 	q.Lock()
 	defer q.Unlock()
-	//Peak
-	elements = q.data
+	//Check if queue is empty
+	if q.checkifEmpty() {
+		empty = true
+		return
+	}
+	//Peak by reversing data
+	for i := q.index; i > -1; i-- {
+		elements = append(elements, q.data[i])
+	}
 	return
 }
 
 //PeekHead allows for peek at last element
-func (q *queue) PeekHead() (element interface{}, underflow bool) {
+func (q *queue) PeekHead() (element interface{}, empty bool) {
 	q.Lock()
 	defer q.Unlock()
-	//Check if queue is empty (underflow)
+	//Check if queue is empty
 	if q.checkifEmpty() {
-		underflow = true
+		empty = true
 		return
 	}
 	//Peak head
-	element = q.data[q.index-1]
+	element = q.data[q.index]
 	return
 }
 
 //PeekTail allows for peek at first element
-func (q *queue) PeekTail() (element interface{}, underflow bool) {
+func (q *queue) PeekTail() (element interface{}, empty bool) {
 	q.Lock()
 	defer q.Unlock()
-	//Check if queue is empty (underflow)
+	//Check if queue is empty
 	if q.checkifEmpty() {
-		underflow = true
+		empty = true
 		return
 	}
 	//Peak tail
@@ -207,7 +212,7 @@ func (q *queue) GetSize() (size int) {
 func (q *queue) GetLength() (len int) {
 	q.Lock()
 	defer q.Unlock()
-	len = q.index
+	len = q.index + 1
 	return
 }
 
@@ -217,8 +222,11 @@ func (q *queue) GetLength() (len int) {
 
 //triggerSignal will send the signal that elemnent(s) have been enqueued
 func (q *queue) triggerSignal() {
-	//TODO: Non-block maybe?
-	q.signal <- struct{}{}
+	select {
+	case q.signal <- struct{}{}:
+	default:
+		//WHOAOAOAOAOA
+	}
 }
 
 //shift shifts the elements up by one
@@ -230,13 +238,13 @@ func (q *queue) shift() {
 
 //checkifEmpty will check if the queue is empty
 func (q *queue) checkifEmpty() (empty bool) {
-	empty = q.index <= 0
+	empty = q.index < 0
 	return
 }
 
 //checkifFull will check if the queue is full
 func (q *queue) checkifFull() (full bool) {
-	full = q.index >= q.size
+	full = q.index+1 >= q.size
 	return
 }
 
@@ -276,7 +284,7 @@ func (q *queue) dequeue() (underflow bool, element interface{}) {
 func (q *queue) flush() (elements []interface{}) {
 	elements = q.data
 	//reset index
-	q.index = 0
+	q.index = -1
 	//clear data
 	q.data = make([]interface{}, q.size)
 	return

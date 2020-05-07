@@ -3,7 +3,9 @@ package queue_test
 import (
 	"fmt"
 	"go-queue"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -11,6 +13,11 @@ import (
 //---------------------------------------------------------------------------------------------------
 // Unit Tests
 //---------------------------------------------------------------------------------------------------
+
+const (
+	fatalUnderflow string = "Unit Test %s encountered underflow"
+	fatalOverflow  string = "Unit Test %s encountered overflow"
+)
 
 func TestClose(t *testing.T) {
 	//Create Queue
@@ -40,44 +47,153 @@ func TestGetSignal(t *testing.T) {
 	}
 }
 
-// func TestDequeue(t *testing.T) {
-// 	cases := map[string]struct {
-// 		iSize      int
-// 		iElemennts []int
-// 		oUnderflow bool
-// 		oElements  []int
-// 	}{
-// 		"Normal": {
-// 			iSize:      10,
-// 			iElemennts: []int{1, 2, 3},
-// 			oUnderflow: false,
-// 			oElements:  []int{1, 2, 3},
-// 		},
-// 		"Overflow": {
-// 			iSize:      2,
-// 			iElemennts: []int{1, 2, 3},
-// 			oUnderflow: true,
-// 			oElements:  []int{1, 2},
-// 		},
-// 	}
+func TestDequeue(t *testing.T) {
+	cases := map[string]struct {
+		iSize     int
+		iElements []interface{}
+		oElements []interface{}
+	}{
+		"Dequeue_Empty": {
+			iSize:     10,
+			iElements: []interface{}{},
+			oElements: nil,
+		},
+		"Dequeue_Single": {
+			iSize:     10,
+			iElements: []interface{}{1},
+			oElements: []interface{}{1},
+		},
+		"Dequeue_Multiple": {
+			iSize:     10,
+			iElements: []interface{}{1, 2, 3},
+			oElements: []interface{}{1, 2, 3},
+		},
+	}
 
-// 	//Test cases
-// 	for cDesc, c := range cases {
-// 		//Create Queue
-// 		testQueue := queue.NewQueue(c.iSize)
-// 		defer testQueue.Close()
-// 		//enqueue
+	//Test cases
+	for cDesc, c := range cases {
+		var wg sync.WaitGroup
+		var elements []interface{}
+		stop := make(chan struct{})
+		// stopper := make(chan struct{})
+		//Create Queue
+		testQueue := queue.NewQueue(c.iSize)
+		defer testQueue.Close()
+		//dequeue routine
+		wg.Add(1)
+		go func(t *testing.T) {
+			defer wg.Done()
+			signal := testQueue.GetSignal()
+			for {
+				select {
+				case <-stop:
+					return
+				case <-signal:
+					//Dequeue
+					element, underflow := testQueue.Dequeue()
+					//Check underflow
+					if underflow {
+						t.Fatalf(fatalUnderflow, "Dequeue")
+					}
+					//elements
+					elements = append(elements, element)
+				}
+			}
+		}(t)
+		time.Sleep(1 * time.Second)
+		//enqueue routine
+		wg.Add(1)
+		go func(t *testing.T) {
+			defer wg.Done()
+			//enqueue
+			for _, element := range c.iElements {
+				if overflow := testQueue.Enqueue(element); overflow {
+					t.Fatalf(fatalOverflow, "Dequeue")
+				}
+				time.Sleep(1 * time.Second)
+			}
+			//stop the dequeue
+			close(stop)
+		}(t)
+		//Wait
+		wg.Wait()
+		//Assert
+		assert.Equal(t, c.oElements, elements, fmt.Sprintf("%s :Elements", cDesc))
+	}
+}
 
-// 	}
-// }
+func TestDequeueMultiple(t *testing.T) {
+	cases := map[string]struct {
+		iSize     int
+		iElements []interface{}
+		oElements []interface{}
+	}{
+		"DequeueMultiple_Empty": {
+			iSize:     10,
+			iElements: []interface{}{},
+			oElements: nil,
+		},
+		"DequeueMultiple_Single": {
+			iSize:     10,
+			iElements: []interface{}{1},
+			oElements: []interface{}{1},
+		},
+		"DequeueMultiple_Multiple": {
+			iSize:     10,
+			iElements: []interface{}{1, 2, 3},
+			oElements: []interface{}{1, 2, 3},
+		},
+	}
 
-// func TestDequeueMultiple(t *testing.T) {
-// 	cases := map[string]struct{}{}
-
-// 	//Test cases
-// 	for cDesc, c := range cases {
-// 	}
-// }
+	//Test cases
+	for cDesc, c := range cases {
+		var wg sync.WaitGroup
+		var elements []interface{}
+		stop := make(chan struct{})
+		// stopper := make(chan struct{})
+		//Create Queue
+		testQueue := queue.NewQueue(c.iSize)
+		defer testQueue.Close()
+		//dequeue routine
+		wg.Add(1)
+		go func(t *testing.T) {
+			defer wg.Done()
+			signal := testQueue.GetSignal()
+			for {
+				select {
+				case <-stop:
+					return
+				case <-signal:
+					//Dequeue
+					dElements, underflow := testQueue.DequeueMultiple(len(c.iElements))
+					//Check underflow
+					if underflow {
+						t.Fatalf(fatalOverflow, "DequeueMultiple")
+					}
+					//elements
+					elements = append(elements, dElements...)
+				}
+			}
+		}(t)
+		time.Sleep(1 * time.Second)
+		//enqueue routine
+		wg.Add(1)
+		go func(t *testing.T) {
+			defer wg.Done()
+			//enqueue
+			if overflow := testQueue.EnqueueMultiple(c.iElements); overflow {
+				t.Fatalf(fatalOverflow, "DequeueMultiple")
+			}
+			time.Sleep(1 * time.Second)
+			//stop the dequeue
+			close(stop)
+		}(t)
+		//Wait
+		wg.Wait()
+		//Assert
+		assert.Equal(t, c.oElements, elements, fmt.Sprintf("%s :Elements", cDesc))
+	}
+}
 
 func TestEnqueue(t *testing.T) {
 	cases := map[string]struct {
@@ -225,7 +341,7 @@ func TestPeek(t *testing.T) {
 		//Enqueue
 		for _, element := range c.iElements {
 			if overflow := testQueue.Enqueue(element); overflow {
-				//TODO: Fatal
+				t.Fatalf(fatalOverflow, "Peek")
 			}
 		}
 		//Peak
@@ -267,7 +383,7 @@ func TestPeekHead(t *testing.T) {
 		//Enqueue
 		for _, element := range c.iElements {
 			if overflow := testQueue.Enqueue(element); overflow {
-				//TODO: Fatal
+				t.Fatalf(fatalOverflow, "Peek")
 			}
 		}
 		//PeakHead
@@ -309,7 +425,7 @@ func TestPeekTail(t *testing.T) {
 		//Enqueue
 		for _, element := range c.iElements {
 			if overflow := testQueue.Enqueue(element); overflow {
-				//TODO: Fatal
+				t.Fatalf(fatalOverflow, "Peek")
 			}
 		}
 		//PeakTail
@@ -374,7 +490,7 @@ func TestGetLength(t *testing.T) {
 		//Enqueue
 		for _, element := range c.iElements {
 			if overflow := testQueue.Enqueue(element); overflow {
-				//TODO: Fatal
+				t.Fatalf(fatalOverflow, "Peek")
 			}
 		}
 		//Get Length

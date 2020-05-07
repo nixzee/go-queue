@@ -5,8 +5,10 @@ import (
 )
 
 //TODO:
-// * Check signal
-// * Check indexing
+// * Add test for underflow in dequeue (no signal?)
+// * Update Readme
+// * Make signal optional block and update test code
+// * Update test harness for edge cases
 
 //---------------------------------------------------------------------------------------------------
 // Queue Interface
@@ -156,7 +158,7 @@ func (q *queue) Flush() (elements []interface{}) {
 	return
 }
 
-//TODO: Check the empty case
+//Peek allows for peeking at all elements in queue
 func (q *queue) Peek() (elements []interface{}, empty bool) {
 	q.Lock()
 	defer q.Unlock()
@@ -227,6 +229,7 @@ func (q *queue) triggerSignal() {
 	default:
 		//WHOAOAOAOAOA
 	}
+	// q.signal <- struct{}{}
 }
 
 //shift shifts the elements up by one
@@ -272,9 +275,9 @@ func (q *queue) dequeue() (underflow bool, element interface{}) {
 		return
 	}
 	//Get the last value in
-	element = q.data[q.index-1]
+	element = q.data[q.index]
 	//clear element from data
-	q.data[q.index-1] = nil
+	q.data[q.index] = nil
 	//decrement index
 	q.index = q.index - 1
 	return

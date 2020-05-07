@@ -6,9 +6,10 @@ import (
 
 //TODO:
 // * Add test for underflow in dequeue (no signal?)
-// * Update Readme
 // * Make signal optional block and update test code
 // * Update test harness for edge cases
+// * Fix test path when pulling from github
+// * Setup Travis CI
 
 //---------------------------------------------------------------------------------------------------
 // Queue Interface

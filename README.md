@@ -4,7 +4,7 @@
 
 ## Finite
 
-The queue has a finite size. This means if the queue size is set to lets say 10 elements, it will have room for 10 elements. Any attempt to enqueue more will cause an overflow flag to be set. Any attempt to dequeue beyond empty will cause an underflow.
+The queue has a finite size. This means if the queue size is set 10 elements it will have room for only 10 elements. Any attempt to enqueue more will cause an overflow flag to be set. Any attempt to dequeue beyond empty will cause an underflow. There is no reason to use an infinite/lossesles queue.
 
 ## Synchronous
 
@@ -12,4 +12,4 @@ One of my biggest gripes with other GO queue packages is that they require the d
 
 ## Install
 
-
+`go get github.com/nixzee/go-queue`

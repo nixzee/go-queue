@@ -2,14 +2,8 @@ package queue
 
 import (
 	"sync"
+	"time"
 )
-
-//TODO:
-// * Add test for underflow in dequeue (no signal?)
-// * Make signal optional block and update test code
-// * Update test harness for edge cases
-// * Fix test path when pulling from github
-// * Setup Travis CI
 
 //---------------------------------------------------------------------------------------------------
 // Queue Interface
@@ -21,14 +15,20 @@ type Queue interface {
 	Close()
 	//GetSignal returns a signal channel that can be monitored if something is enqueue (event driven)
 	GetSignal() (signal <-chan struct{})
-	//Dequeue dequeues a single (last) element
+	//Dequeue will dequeue a single (last) element
 	Dequeue() (element interface{}, underflow bool)
-	//DequeueMultiple dequeues a multiple (last) element
+	//DequeueMultiple will dequeue a multiple (last) element
 	DequeueMultiple(count int) (elements []interface{}, underflow bool)
-	//Enqueue enqueues a single element
+	//Enqueue will enqueue a single element
 	Enqueue(element interface{}) (overflow bool)
-	//EnqueueMultiple enqueues multiple element
+	//EnqueueMultiple will enqueue multiple element
 	EnqueueMultiple(elements []interface{}) (overflow bool)
+	//EnqueueWithTimeout will enqueue a single element and will block with a timeout in ms
+	//If the timeout is zero, it will just block
+	EnqueueWithTimeout(element interface{}, timeout uint32) (overflow bool)
+	//EnqueueWithTimeout will enqueue a multiple element and will block with a timeout in ms
+	//If the timeout is zero, it will just block
+	EnqueueMultipleWithTimeout(elements []interface{}, timeout uint32) (overflow bool)
 	//Flush will flush the queue and return all elements that were in it
 	Flush() (elements []interface{})
 	//Peek allows for peeking at all elements in queue
@@ -44,7 +44,7 @@ type Queue interface {
 }
 
 //---------------------------------------------------------------------------------------------------
-// queue (pointer implmentation of the Queue Interface)
+// queue (pointer implementation of the Queue Interface)
 //---------------------------------------------------------------------------------------------------
 
 //queue provides a pointer implementation of Queue
@@ -96,7 +96,7 @@ func (q *queue) GetSignal() (signal <-chan struct{}) {
 	return
 }
 
-//Dequeue dequeues a single (last) element
+//Dequeue will dequeue a single (last) element
 func (q *queue) Dequeue() (element interface{}, underflow bool) {
 	q.Lock()
 	defer q.Unlock()
@@ -106,7 +106,7 @@ func (q *queue) Dequeue() (element interface{}, underflow bool) {
 	return
 }
 
-//DequeueMultiple dequeues a multiple (last) element
+//DequeueMultiple will dequeue a multiple (last) element
 func (q *queue) DequeueMultiple(count int) (elements []interface{}, underflow bool) {
 	q.Lock()
 	defer q.Unlock()
@@ -124,7 +124,7 @@ func (q *queue) DequeueMultiple(count int) (elements []interface{}, underflow bo
 	return
 }
 
-//Enqueue enqueues a single element
+//Enqueue will enqueue a single element
 func (q *queue) Enqueue(element interface{}) (overflow bool) {
 	q.Lock()
 	defer q.Unlock()
@@ -135,7 +135,7 @@ func (q *queue) Enqueue(element interface{}) (overflow bool) {
 	return
 }
 
-//EnqueueMultiple enqueues multiple element
+//EnqueueMultiple will enqueue multiple element
 func (q *queue) EnqueueMultiple(elements []interface{}) (overflow bool) {
 	q.Lock()
 	defer q.Unlock()
@@ -146,6 +146,32 @@ func (q *queue) EnqueueMultiple(elements []interface{}) (overflow bool) {
 			return
 		}
 		q.triggerSignal()
+	}
+	return
+}
+
+//EnqueueWithTimeout will enqueue a single element and will block with a timeout in ms
+func (q *queue) EnqueueWithTimeout(element interface{}, timeout uint32) (overflow bool) {
+	q.Lock()
+	defer q.Unlock()
+	//enqueue
+	overflow = q.enqueue(element)
+	//trigger signal
+	q.triggerSignalwithTimeout(timeout)
+	return
+}
+
+//EnqueueMultiple will enqueue multiple element and will block with a timeout in ms
+func (q *queue) EnqueueMultipleWithTimeout(elements []interface{}, timeout uint32) (overflow bool) {
+	q.Lock()
+	defer q.Unlock()
+	//enqueue each element
+	for _, element := range elements {
+		if overflow = q.enqueue(element); overflow {
+			//overflow
+			return
+		}
+		q.triggerSignalwithTimeout(timeout)
 	}
 	return
 }
@@ -223,14 +249,32 @@ func (q *queue) GetLength() (len int) {
 // private queue methods
 //---------------------------------------------------------------------------------------------------
 
-//triggerSignal will send the signal that elemnent(s) have been enqueued
+//triggerSignal will send the signal that elemnent(s) have been enqueued (non-blocking)
 func (q *queue) triggerSignal() {
 	select {
 	case q.signal <- struct{}{}:
 	default:
 		//WHOAOAOAOAOA
 	}
-	// q.signal <- struct{}{}
+}
+
+//triggerSignalwithTimeout will send the signal that elemnent(s) have been enqueued
+//If the timeout is not zero, it will block until timeout (ms) expires
+//If timeout is zero, it will block on the channel
+func (q *queue) triggerSignalwithTimeout(timeout uint32) {
+	//Check if using the time is greater than 0.
+	//If Zero, then we will just block
+	if timeout != 0 {
+		ticker := time.NewTicker(time.Duration(timeout) * time.Millisecond)
+		defer ticker.Stop()
+		//Block or and wait on timer
+		select {
+		case q.signal <- struct{}{}:
+		case <-ticker.C:
+		}
+	} else {
+		q.signal <- struct{}{}
+	}
 }
 
 //shift shifts the elements up by one

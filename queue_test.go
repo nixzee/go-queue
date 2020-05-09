@@ -9,6 +9,10 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+//TODO:
+// * Add test for underflow in dequeue (no signal?)
+// * Add test for timeout and block cases
+
 //---------------------------------------------------------------------------------------------------
 // Unit Tests
 //---------------------------------------------------------------------------------------------------
@@ -236,6 +240,81 @@ func TestEnqueue(t *testing.T) {
 		}
 		//Assert
 		assert.Equal(t, c.oOverflow, overflow, fmt.Sprintf("%s :Overflow", cDesc))
+	}
+}
+
+func TestEnqueueWithTimeout(t *testing.T) {
+	cases := map[string]struct {
+		iSize     int
+		iElements []interface{}
+		oElements []interface{}
+	}{
+		// "Dequeue_Empty": {
+		// 	iSize:     10,
+		// 	iElements: []interface{}{},
+		// 	oElements: nil,
+		// },
+		"EnqueueWithTimeout_Single": {
+			iSize:     10,
+			iElements: []interface{}{1},
+			oElements: []interface{}{1},
+		},
+		// "Dequeue_Multiple": {
+		// 	iSize:     10,
+		// 	iElements: []interface{}{1, 2, 3},
+		// 	oElements: []interface{}{1, 2, 3},
+		// },
+	}
+
+	//Test cases
+	for cDesc, c := range cases {
+		var wg sync.WaitGroup
+		var elements []interface{}
+		stop := make(chan struct{})
+		// stopper := make(chan struct{})
+		//Create Queue
+		testQueue := NewQueue(c.iSize)
+		defer testQueue.Close()
+		//dequeue routine
+		wg.Add(1)
+		go func(t *testing.T) {
+			defer wg.Done()
+			signal := testQueue.GetSignal()
+			for {
+				select {
+				case <-stop:
+					return
+				case <-signal:
+					//Dequeue
+					element, underflow := testQueue.Dequeue()
+					//Check underflow
+					if underflow {
+						t.Fatalf(fatalUnderflow, "Dequeue")
+					}
+					//elements
+					elements = append(elements, element)
+				}
+			}
+		}(t)
+		time.Sleep(1 * time.Second)
+		//enqueue routine
+		wg.Add(1)
+		go func(t *testing.T) {
+			defer wg.Done()
+			//enqueue
+			for _, element := range c.iElements {
+				if overflow := testQueue.EnqueueWithTimeout(element, 0); overflow {
+					t.Fatalf(fatalOverflow, "Dequeue")
+				}
+				time.Sleep(1 * time.Second)
+			}
+			//stop the dequeue
+			close(stop)
+		}(t)
+		//Wait
+		wg.Wait()
+		//Assert
+		assert.Equal(t, c.oElements, elements, fmt.Sprintf("%s :Elements", cDesc))
 	}
 }
 

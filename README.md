@@ -1,5 +1,7 @@
 # go-queue
 
+[![Build Status](https://travis-ci.org/nixzee/go-queue.svg?branch=master)](https://travis-ci.org/nixzee/go-queue)
+
 `go-queue` is a Finite Synchronous Queue GO package. Lets break that apart:
 
 ## Finite

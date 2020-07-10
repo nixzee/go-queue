@@ -2,7 +2,6 @@ package queue
 
 import (
 	"sync"
-	"time"
 )
 
 //---------------------------------------------------------------------------------------------------
@@ -23,12 +22,6 @@ type Queue interface {
 	Enqueue(element interface{}) (overflow bool)
 	//EnqueueMultiple will enqueue multiple element
 	EnqueueMultiple(elements []interface{}) (overflow bool)
-	//EnqueueWithTimeout will enqueue a single element and will block with a timeout in ms
-	//If the timeout is zero, it will just block
-	EnqueueWithTimeout(element interface{}, timeout uint32) (overflow bool)
-	//EnqueueWithTimeout will enqueue a multiple element and will block with a timeout in ms
-	//If the timeout is zero, it will just block
-	EnqueueMultipleWithTimeout(elements []interface{}, timeout uint32) (overflow bool)
 	//Flush will flush the queue and return all elements that were in it
 	Flush() (elements []interface{})
 	//Peek allows for peeking at all elements in queue
@@ -65,7 +58,8 @@ func NewQueue(size int) interface {
 		size = DefaultSize
 	}
 	data := make([]interface{}, size)
-	signal := make(chan struct{})
+	signal := make(chan struct{}, size) //Buffered channel
+	// signal := make(chan struct{})
 	return &queue{
 		data:   data,
 		size:   size,
@@ -145,34 +139,8 @@ func (q *queue) EnqueueMultiple(elements []interface{}) (overflow bool) {
 			//overflow
 			return
 		}
-		q.triggerSignal()
 	}
-	return
-}
-
-//EnqueueWithTimeout will enqueue a single element and will block with a timeout in ms
-func (q *queue) EnqueueWithTimeout(element interface{}, timeout uint32) (overflow bool) {
-	q.Lock()
-	defer q.Unlock()
-	//enqueue
-	overflow = q.enqueue(element)
-	//trigger signal
-	q.triggerSignalwithTimeout(timeout)
-	return
-}
-
-//EnqueueMultiple will enqueue multiple element and will block with a timeout in ms
-func (q *queue) EnqueueMultipleWithTimeout(elements []interface{}, timeout uint32) (overflow bool) {
-	q.Lock()
-	defer q.Unlock()
-	//enqueue each element
-	for _, element := range elements {
-		if overflow = q.enqueue(element); overflow {
-			//overflow
-			return
-		}
-		q.triggerSignalwithTimeout(timeout)
-	}
+	q.triggerSignal()
 	return
 }
 
@@ -190,7 +158,7 @@ func (q *queue) Peek() (elements []interface{}, empty bool) {
 	q.Lock()
 	defer q.Unlock()
 	//Check if queue is empty
-	if q.checkifEmpty() {
+	if q.checkIfEmpty() {
 		empty = true
 		return
 	}
@@ -206,7 +174,7 @@ func (q *queue) PeekHead() (element interface{}, empty bool) {
 	q.Lock()
 	defer q.Unlock()
 	//Check if queue is empty
-	if q.checkifEmpty() {
+	if q.checkIfEmpty() {
 		empty = true
 		return
 	}
@@ -220,7 +188,7 @@ func (q *queue) PeekTail() (element interface{}, empty bool) {
 	q.Lock()
 	defer q.Unlock()
 	//Check if queue is empty
-	if q.checkifEmpty() {
+	if q.checkIfEmpty() {
 		empty = true
 		return
 	}
@@ -249,31 +217,11 @@ func (q *queue) GetLength() (len int) {
 // private queue methods
 //---------------------------------------------------------------------------------------------------
 
-//triggerSignal will send the signal that elemnent(s) have been enqueued (non-blocking)
+//triggerSignal will send the signal that element(s) have been enqueued (non-blocking)
 func (q *queue) triggerSignal() {
 	select {
 	case q.signal <- struct{}{}:
 	default:
-		//WHOAOAOAOAOA
-	}
-}
-
-//triggerSignalwithTimeout will send the signal that elemnent(s) have been enqueued
-//If the timeout is not zero, it will block until timeout (ms) expires
-//If timeout is zero, it will block on the channel
-func (q *queue) triggerSignalwithTimeout(timeout uint32) {
-	//Check if using the time is greater than 0.
-	//If Zero, then we will just block
-	if timeout != 0 {
-		ticker := time.NewTicker(time.Duration(timeout) * time.Millisecond)
-		defer ticker.Stop()
-		//Block or and wait on timer
-		select {
-		case q.signal <- struct{}{}:
-		case <-ticker.C:
-		}
-	} else {
-		q.signal <- struct{}{}
 	}
 }
 
@@ -284,14 +232,14 @@ func (q *queue) shift() {
 	return
 }
 
-//checkifEmpty will check if the queue is empty
-func (q *queue) checkifEmpty() (empty bool) {
+//checkIfEmpty will check if the queue is empty
+func (q *queue) checkIfEmpty() (empty bool) {
 	empty = q.index < 0
 	return
 }
 
-//checkifFull will check if the queue is full
-func (q *queue) checkifFull() (full bool) {
+//checkIfFull will check if the queue is full
+func (q *queue) checkIfFull() (full bool) {
 	full = q.index+1 >= q.size
 	return
 }
@@ -299,7 +247,7 @@ func (q *queue) checkifFull() (full bool) {
 //enqueue performs the enqueue logic
 func (q *queue) enqueue(element interface{}) (overflow bool) {
 	//Check if queue is full (overflow)
-	if q.checkifFull() {
+	if q.checkIfFull() {
 		overflow = true
 		return
 	}
@@ -315,7 +263,7 @@ func (q *queue) enqueue(element interface{}) (overflow bool) {
 //dequeue performs the dequeue logic
 func (q *queue) dequeue() (underflow bool, element interface{}) {
 	//Check if queue is empty (underflow)
-	if q.checkifEmpty() {
+	if q.checkIfEmpty() {
 		underflow = true
 		return
 	}

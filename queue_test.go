@@ -670,3 +670,36 @@ func TestGetLength(t *testing.T) {
 		assert.Equal(t, c.oLength, length, fmt.Sprintf("%s :Length", cDesc))
 	}
 }
+
+//TestResize will test the resize
+func TestResize(t *testing.T) {
+	cases := map[string]struct {
+		iInitialSize int
+		iFinalSize   int
+		oInitialSize int
+		oFinalSize   int
+	}{
+		"Resize_Valid": {
+			iInitialSize: 10,
+			iFinalSize:   100,
+			oInitialSize: 10,
+			oFinalSize:   100,
+		},
+	}
+	//Test cases
+	for cDesc, c := range cases {
+		//Create Queue
+		testQueue := NewQueue(c.iInitialSize, false)
+		defer testQueue.Close()
+		//Get Size
+		initialSize := testQueue.GetSize()
+		//Assert
+		assert.Equal(t, c.oInitialSize, initialSize, fmt.Sprintf(cDesc))
+		//Resize
+		testQueue.Resize(c.iFinalSize)
+		//Get Size
+		finalSize := testQueue.GetSize()
+		//Assert
+		assert.Equal(t, c.oFinalSize, finalSize, fmt.Sprintf(cDesc))
+	}
+}

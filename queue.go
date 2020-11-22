@@ -6,7 +6,6 @@ import (
 )
 
 //TODO:
-// * Change container to pointer and check for memory leak
 // * Add more testing
 // * Clean up
 // * Documentation
@@ -191,9 +190,10 @@ func (q *queue) Flush() (elements []interface{}, priorities []int) {
 	q.Lock()
 	defer q.Unlock()
 	//Get the elements and priorities
-	for _, container := range q.containers {
+	for index, container := range q.containers {
 		elements = append(elements, container.element)
 		priorities = append(priorities, container.priority)
+		q.containers[index] = nil
 	}
 	//Reset the containers
 	// q.containers = make([]container, q.size)
@@ -448,11 +448,11 @@ func (q *queue) dequeue() (underflow bool, element interface{}, priority int) {
 		return
 	}
 	//Pop
-	// container := heap.Pop(q).(container)
-	container := (q.containers)[0]
-	q.containers = (q.containers)[1:]
+	container := q.containers[0]
 	element = container.element
 	priority = container.priority
+	q.containers[0] = nil //Come garbage collect
+	q.containers = q.containers[1:]
 	return
 }
 

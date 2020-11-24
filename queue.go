@@ -153,7 +153,6 @@ func (q *queue) Close() {
 	//Cleanup
 	q.signal, q.containers = nil, nil
 	q.size = 0
-	return
 }
 
 //Resize will flush and resize the queue

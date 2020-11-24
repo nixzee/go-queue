@@ -20,5 +20,4 @@ const (
 type container struct {
 	element  interface{}
 	priority int
-	index    int
 }

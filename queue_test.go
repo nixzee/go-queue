@@ -28,7 +28,6 @@ func assertMsg(name, desc string) string {
 
 //TestClose will test close
 func TestClose(t *testing.T) {
-	const name string = "Close"
 	//Create Queue
 	testQueue := NewQueue(1, false)
 	//Close
@@ -601,6 +600,7 @@ func TestDequeueConcurrent(t *testing.T) {
 		testQueue := NewQueue(c.iSize, false)
 		defer testQueue.Close()
 		//dequeue routine
+		underflow, overflow := false, false
 		wg.Add(1)
 		go func(t *testing.T) {
 			defer wg.Done()
@@ -610,11 +610,10 @@ func TestDequeueConcurrent(t *testing.T) {
 				case <-stop:
 					return
 				case <-signal:
+					var element interface{}
 					//Dequeue
-					element, underflow := testQueue.Dequeue()
-					//Check underflow
-					if underflow {
-						t.Fatalf(fatalUnderflow, msg)
+					if element, underflow = testQueue.Dequeue(); underflow {
+						return
 					}
 					//elements
 					elements = append(elements, element)
@@ -628,8 +627,8 @@ func TestDequeueConcurrent(t *testing.T) {
 			defer wg.Done()
 			//enqueue
 			for _, element := range c.iElements {
-				if overflow := testQueue.Enqueue(element); overflow {
-					t.Fatalf(fatalOverflow, msg)
+				if overflow = testQueue.Enqueue(element); overflow {
+					return
 				}
 				time.Sleep(100 * time.Millisecond)
 			}
@@ -638,6 +637,13 @@ func TestDequeueConcurrent(t *testing.T) {
 		}(t)
 		//Wait
 		wg.Wait()
+		//Check for underflow and overflow
+		if underflow {
+			t.Fatalf(fatalUnderflow, msg)
+		}
+		if overflow {
+			t.Fatalf(fatalOverflow, msg)
+		}
 		//Assert
 		assert.Equal(t, c.oElements, elements, fmt.Sprintf("%s :Elements", msg))
 	}
@@ -792,6 +798,7 @@ func TestDequeuePriorityConcurrent(t *testing.T) {
 		testQueue := NewQueue(c.iSize, false)
 		defer testQueue.Close()
 		//dequeue routine
+		underflow, overflow := false, false
 		wg.Add(1)
 		go func(t *testing.T) {
 			defer wg.Done()
@@ -801,11 +808,11 @@ func TestDequeuePriorityConcurrent(t *testing.T) {
 				case <-stop:
 					return
 				case <-signal:
+					var element interface{}
+					var priority int
 					//Dequeue
-					element, priority, underflow := testQueue.DequeuePriority()
-					//Check underflow
-					if underflow {
-						t.Fatalf(fatalUnderflow, msg)
+					if element, priority, underflow = testQueue.DequeuePriority(); underflow {
+						return
 					}
 					//elements
 					elements = append(elements, element)
@@ -820,8 +827,8 @@ func TestDequeuePriorityConcurrent(t *testing.T) {
 			defer wg.Done()
 			//enqueue
 			for index, element := range c.iElements {
-				if overflow := testQueue.EnqueuePriority(element, c.iPriorities[index]); overflow {
-					t.Fatalf(fatalOverflow, msg)
+				if overflow = testQueue.EnqueuePriority(element, c.iPriorities[index]); overflow {
+					return
 				}
 				time.Sleep(100 * time.Millisecond)
 			}
@@ -830,6 +837,13 @@ func TestDequeuePriorityConcurrent(t *testing.T) {
 		}(t)
 		//Wait
 		wg.Wait()
+		//Check for underflow and overflow
+		if underflow {
+			t.Fatalf(fatalUnderflow, msg)
+		}
+		if overflow {
+			t.Fatalf(fatalOverflow, msg)
+		}
 		//Assert
 		assert.Equal(t, c.oElements, elements, fmt.Sprintf("%s :Elements", msg))
 		assert.Equal(t, c.oPriorities, priorities, fmt.Sprintf("%s :Priorities", msg))

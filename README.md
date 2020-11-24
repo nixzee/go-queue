@@ -1,7 +1,7 @@
 # go-queue
 
 [![Test Status](https://github.com/nixzee/go-queue/workflows/Test/badge.svg)](https://github.com/nixzee/go-queue/actions)
-[![Coverage Status](https://coveralls.io/repos/github.com/nixzee/go-queue?branch=master)](https://coveralls.io/github.com/nixzee/go-queue?branch=master)
+[![Coverage Status](https://coveralls.io/repos/github/nixzee/go-queue/badge.svg?branch=master)](https://coveralls.io/github/nixzee/go-queue?branch=master)
 [![Go Report Card](https://goreportcard.com/badge/github.com/nixzee/go-queue/actions)](https://github.com/nixzee/go-queue)
 
 `go-queue` is a Finite Synchronous Priority Queue GO package. Let us break that apart:

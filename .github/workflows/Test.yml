@@ -12,31 +12,16 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-
     - name: Install Go
       uses: actions/setup-go@v2
       with:
-        go-version: ^1.14
-
+        go-version: 1.14.x
     - name: Checkout code
       uses: actions/checkout@v2
-
-    - name: Get dependencies
-      run: |
-        go get -v -t -d ./...
-        if [ -f Gopkg.toml ]; then
-            curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
-            dep ensure
-        fi
-
-    - name: Install golangci-lint
-      run: |
-        go get github.com/golangci/golangci-lint/cmd/golangci-lint
-
     - name: Run linters
-      run: |
-        export PATH=$PATH:$(go env GOPATH)/bin
-        ./pre-commit
+      uses: golangci/golangci-lint-action@v2
+      with:
+        version: v1.29
 
   test:
     strategy:

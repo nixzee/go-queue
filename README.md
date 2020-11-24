@@ -16,7 +16,7 @@ One of my biggest gripes with other GO queue packages is that they require the d
 
 ## Priority
 
-Elements inserted into the queue can be given priority. The higher the number, the higher priority. Elements with higher priority will bumped up in the enqueue until it reaches the end or finds and element of the same or higher priority. The queue will maintain order like any FIFO would.
+Elements inserted into the queue can be given priority. The higher the number, the higher priority. Elements with higher priority will bumped up in the queue until it reaches the end or finds and element of the same or higher priority. The queue will maintain order like any FIFO would.
 
 ## Install
 

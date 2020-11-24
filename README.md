@@ -1,6 +1,7 @@
 # go-queue
 
-[![Go-Queue Actions Status](https://github.com/nixzee/go-queue/workflows/Go/badge.svg)](https://github.com/nixzee/go-queue/actions)
+[![Test Status](https://github.com/nixzee/go-queue/workflows/Test/badge.svg)](https://github.com/nixzee/go-queue/actions)
+[![Go Report Card](https://goreportcard.com/badge/github.com/nixzee/go-queue/actions)](https://github.com/nixzee/go-queue)
 
 `go-queue` is a Finite Synchronous Priority Queue GO package. Let us break that apart:
 
@@ -19,4 +20,3 @@ Elements inserted into the queue can be given priority. The higher the number, t
 ## Install
 
 `go get github.com/nixzee/go-queue`
-

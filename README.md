@@ -1,5 +1,7 @@
 # go-queue
 
+[![Go-Queue Actions Status](https://github.com/nixzee/go-queue/workflows/Go/badge.svg)](https://github.com/nixzee/go-queue/actions)
+
 `go-queue` is a Finite Synchronous Priority Queue GO package. Let us break that apart:
 
 ## Finite

@@ -123,7 +123,7 @@ func NewQueue(size int, polling bool) interface {
 		signal = make(chan struct{}, size)
 	}
 	//Create the containers
-	containers := make([]*container, 0)
+	containers := make([]*container, 0, size)
 	//Create the queue
 	return &queue{
 		size:       size,
